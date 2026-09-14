@@ -2,29 +2,11 @@ import io
 import pandas as pd
 import streamlit as st
 
-# Tentar importar ReportLab para geração de PDF
-try:
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import (
-        Paragraph,
-        SimpleDocTemplate,
-        Spacer,
-        Table,
-        TableStyle,
-    )
-
-    HAS_REPORTLAB = True
-except ImportError:
-    HAS_REPORTLAB = False
-
 # Tentar importar openpyxl para formatação avançada do Excel
 try:
     import openpyxl
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
-
     HAS_OPENPYXL = True
 except ImportError:
     HAS_OPENPYXL = False
@@ -113,13 +95,10 @@ st.markdown(
 # Inicialização do Session State
 if "ano_letivo" not in st.session_state:
     st.session_state.ano_letivo = 2026
-
 if "turmas" not in st.session_state:
     st.session_state.turmas = ["12101", "12102", "12103", "12104"]
-
 if "turma_atual" not in st.session_state:
     st.session_state.turma_atual = "12101"
-
 if "editing_idx" not in st.session_state:
     st.session_state.editing_idx = None
 
@@ -171,7 +150,6 @@ if "lancamentos" not in st.session_state:
     st.session_state.lancamentos = []
 
 st.title(f"📊 Conferência dos Diários - {st.session_state.ano_letivo}")
-
 aba1, aba2 = st.tabs(["📋 Grade de Aulas (Visualização)", "⚙️ Configurações"])
 
 # -------------------------------------------------------------
@@ -180,7 +158,6 @@ aba1, aba2 = st.tabs(["📋 Grade de Aulas (Visualização)", "⚙️ Configura�
 with aba2:
     st.subheader("⚙️ Configurações Gerais")
     col_cfg1, col_cfg2, col_cfg3 = st.columns([1, 1, 1])
-
     with col_cfg1:
         st.markdown("### 1. Ano Letivo")
         novo_ano = st.number_input(
@@ -204,7 +181,6 @@ with aba2:
                 st.session_state.turmas.append(nova_turma.upper())
                 st.session_state.turmas.sort()
                 st.rerun()
-
         turma_rem = st.selectbox(
             "Excluir Turma Definitivamente:",
             ["-- Selecione --"] + st.session_state.turmas,
@@ -233,21 +209,12 @@ with aba2:
                 st.rerun()
 
     st.markdown("---")
-    st.markdown("### 4. Dias de cada Etapa (Calendário Escolar)")
-
-    df_editvel = st.data_editor(
-        st.session_state.dias_etapas,
-        num_rows="fixed",
-        use_container_width=True,
-        key="editor_etapas",
-    )
-    st.session_state.dias_etapas = df_editvel
-
-    df_calc = df_editvel.copy()
+    
+    # Cálculo automático dos totais de dias das etapas
+    df_calc = st.session_state.dias_etapas.copy()
     df_calc["TOTAL DIAS"] = df_calc[["Etapa 1", "Etapa 2", "Etapa 3"]].sum(
         axis=1
     )
-
     linha_total = pd.DataFrame({
         "Dia da Semana": ["TOTAL ETAPAS"],
         "Etapa 1": [df_calc["Etapa 1"].sum()],
@@ -255,10 +222,9 @@ with aba2:
         "Etapa 3": [df_calc["Etapa 3"].sum()],
         "TOTAL DIAS": [df_calc["TOTAL DIAS"].sum()],
     })
-
     df_conferencia = pd.concat([df_calc, linha_total], ignore_index=True)
 
-    st.markdown("**📋 Tabela de Conferência (Totais Automáticos):**")
+    st.markdown("### 📋 CÁLCULO DE DIAS DE CADA ETAPA")
     st.dataframe(
         df_conferencia,
         use_container_width=True,
@@ -279,7 +245,6 @@ with aba1:
     if st.session_state.editing_idx is not None:
         st.markdown("### ✏️ Editando Disciplina Lançada")
         item_edit = st.session_state.lancamentos[st.session_state.editing_idx]
-
         c_m, c_prev, c_seg, c_ter, c_qua, c_qui, c_sex = st.columns(
             [2.5, 1.2, 1, 1, 1, 1, 1]
         )
@@ -391,7 +356,6 @@ with aba1:
 
     if lancamentos_turma:
         titulo_grade = f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}"
-
         html_code = f"""
         <table class="excel-table">
             <thead>
@@ -482,7 +446,6 @@ with aba1:
                 tot_etapa = s_t + t_t + q_t + qui_t + sex_t
 
                 html_code += f'<tr class="{bg_class}">'
-
                 if e == 1:
                     html_code += f'<td rowspan="3" style="font-weight:bold;">{mat}</td>'
 
@@ -519,7 +482,7 @@ with aba1:
         # AÇÕES PARA CADA DISCIPLINA ORGANIZADAS EM TABELA
         # -------------------------------------------------------------
         st.markdown("### ⚙️ Ações para cada Disciplina")
-        
+
         cols_per_row = 3
         for i in range(0, len(lancamentos_turma), cols_per_row):
             batch = lancamentos_turma[i : i + cols_per_row]
@@ -550,369 +513,193 @@ with aba1:
         # EXPORTAÇÃO EXCEL IDENTICA À TELA (OPENPYXL)
         # -------------------------------------------------------------
         st.markdown("---")
-        c_exp1, c_exp2 = st.columns([1, 1])
+        if HAS_OPENPYXL:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Conferência"
+            ws.views.sheetView[0].showGridLines = True
 
-        with c_exp1:
-            if HAS_OPENPYXL:
-                wb = openpyxl.Workbook()
-                ws = wb.active
-                ws.title = "Conferência"
+            # Estilos
+            header_main_fill = PatternFill(start_color="0D2B59", end_color="0D2B59", fill_type="solid")
+            header_sub_fill = PatternFill(start_color="1B55A8", end_color="1B55A8", fill_type="solid")
+            materia_bg_0 = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+            materia_bg_1 = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+            destaque_fill = PatternFill(start_color="FFF59D", end_color="FFF59D", fill_type="solid")
+            ok_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
+            err_fill = PatternFill(start_color="FFCDD2", end_color="FFCDD2", fill_type="solid")
 
-                ws.views.sheetView[0].showGridLines = True
+            font_header = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+            font_title = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+            font_regular = Font(name="Segoe UI", size=10)
+            font_bold = Font(name="Segoe UI", size=10, bold=True)
+            font_ok = Font(name="Segoe UI", size=10, bold=True, color="2E7D32")
+            font_err = Font(name="Segoe UI", size=10, bold=True, color="C62828")
 
-                # Estilos
-                header_main_fill = PatternFill(start_color="0D2B59", end_color="0D2B59", fill_type="solid")
-                header_sub_fill = PatternFill(start_color="1B55A8", end_color="1B55A8", fill_type="solid")
-                materia_bg_0 = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-                materia_bg_1 = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
-                destaque_fill = PatternFill(start_color="FFF59D", end_color="FFF59D", fill_type="solid")
-                ok_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
-                err_fill = PatternFill(start_color="FFCDD2", end_color="FFCDD2", fill_type="solid")
+            align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            thin_border_side = Side(style="thin", color="CCCCCC")
+            header_border_side = Side(style="thin", color="103871")
+            border_cell = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+            border_header = Border(left=header_border_side, right=header_border_side, top=header_border_side, bottom=header_border_side)
 
-                font_header = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
-                font_title = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
-                font_regular = Font(name="Segoe UI", size=10)
-                font_bold = Font(name="Segoe UI", size=10, bold=True)
-                font_ok = Font(name="Segoe UI", size=10, bold=True, color="2E7D32")
-                font_err = Font(name="Segoe UI", size=10, bold=True, color="C62828")
+            # Linha 1: Título Principal
+            ws.merge_cells("A1:U1")
+            ws["A1"] = titulo_grade
+            ws["A1"].font = font_title
+            ws["A1"].fill = header_main_fill
+            ws["A1"].alignment = align_center
 
-                align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                thin_border_side = Side(style="thin", color="CCCCCC")
-                header_border_side = Side(style="thin", color="103871")
-                border_cell = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
-                border_header = Border(left=header_border_side, right=header_border_side, top=header_border_side, bottom=header_border_side)
+            # Ajuste de merge do cabeçalho
+            ws.merge_cells("A2:A3")
+            ws["A2"] = "Componente Curricular"
+            ws.merge_cells("B2:B3")
+            ws["B2"] = "Etapa"
+            ws.merge_cells("C2:E2")
+            ws["C2"] = "Segunda"
+            ws.merge_cells("F2:H2")
+            ws["F2"] = "Terça"
+            ws.merge_cells("I2:K2")
+            ws["I2"] = "Quarta"
+            ws.merge_cells("L2:N2")
+            ws["L2"] = "Quinta"
+            ws.merge_cells("O2:Q2")
+            ws["O2"] = "Sexta"
+            ws.merge_cells("R2:R3")
+            ws["R2"] = "Nº aulas por etapa"
+            ws.merge_cells("S2:S3")
+            ws["S2"] = "TOTAL AULAS"
+            ws.merge_cells("T2:T3")
+            ws["T2"] = "AULAS ANUAL"
+            ws.merge_cells("U2:U3")
+            ws["U2"] = "SITUAÇÃO"
 
-                # Linha 1: Título Principal
-                ws.merge_cells("A1:U1")
-                ws["A1"] = titulo_grade
-                ws["A1"].font = font_title
-                ws["A1"].fill = header_main_fill
-                ws["A1"].alignment = align_center
+            sub_headers = ["Nº aulas", "Nº/etapa", "Total"] * 5
+            for col_idx, sub in enumerate(sub_headers, start=3):
+                cell = ws.cell(row=3, column=col_idx)
+                cell.value = sub
 
-                # Ajuste de merge do cabeçalho
-                ws.merge_cells("A2:A3")
-                ws["A2"] = "Componente Curricular"
-                ws.merge_cells("B2:B3")
-                ws["B2"] = "Etapa"
-                ws.merge_cells("C2:E2")
-                ws["C2"] = "Segunda"
-                ws.merge_cells("F2:H2")
-                ws["F2"] = "Terça"
-                ws.merge_cells("I2:K2")
-                ws["I2"] = "Quarta"
-                ws.merge_cells("L2:N2")
-                ws["L2"] = "Quinta"
-                ws.merge_cells("O2:Q2")
-                ws["O2"] = "Sexta"
-                ws.merge_cells("R2:R3")
-                ws["R2"] = "Nº aulas por etapa"
-                ws.merge_cells("S2:S3")
-                ws["S2"] = "TOTAL AULAS"
-                ws.merge_cells("T2:T3")
-                ws["T2"] = "AULAS ANUAL"
-                ws.merge_cells("U2:U3")
-                ws["U2"] = "SITUAÇÃO"
+            # Estilizar todo o bloco de cabeçalho
+            for r in range(2, 4):
+                for c in range(1, 22):
+                    cell = ws.cell(row=r, column=c)
+                    cell.fill = header_sub_fill
+                    cell.font = font_header
+                    cell.alignment = align_center
+                    cell.border = border_header
 
-                sub_headers = ["Nº aulas", "Nº/etapa", "Total"] * 5
-                for col_idx, sub in enumerate(sub_headers, start=3):
-                    cell = ws.cell(row=3, column=col_idx)
-                    cell.value = sub
+            current_row = 4
+            for pos, (orig_idx, item) in enumerate(lancamentos_turma):
+                mat = item["materia"]
+                prev = item["previsto"]
+                s_a, t_a, q_a, qui_a, sex_a = item["Seg"], item["Ter"], item["Qua"], item["Qui"], item["Sex"]
+                bg_fill = materia_bg_1 if pos % 2 == 0 else materia_bg_0
 
-                # Estilizar todo o bloco de cabeçalho
-                for r in range(2, 4):
+                tot_anual = 0
+                for e in [1, 2, 3]:
+                    s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                    t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                    q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                    qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                    sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+                    tot_anual += (s_a * s_d) + (t_a * t_d) + (q_a * q_d) + (qui_a * qui_d) + (sex_a * sex_d)
+
+                dif = tot_anual - prev
+                sit_txt = "OK" if dif == 0 else (f"EXCESSO (+{dif})" if dif > 0 else f"FALTA ({dif})")
+                sit_font = font_ok if dif == 0 else font_err
+                sit_fill = ok_fill if dif == 0 else err_fill
+
+                # Preenchimento das 3 linhas do componente
+                r_start = current_row
+                r_end = current_row + 2
+
+                ws.merge_cells(start_row=r_start, start_column=1, end_row=r_end, end_column=1)
+                ws.cell(row=r_start, column=1, value=mat)
+
+                ws.merge_cells(start_row=r_start, start_column=3, end_row=r_end, end_column=3)
+                ws.cell(row=r_start, column=3, value=s_a)
+
+                ws.merge_cells(start_row=r_start, start_column=6, end_row=r_end, end_column=6)
+                ws.cell(row=r_start, column=6, value=t_a)
+
+                ws.merge_cells(start_row=r_start, start_column=9, end_row=r_end, end_column=9)
+                ws.cell(row=r_start, column=9, value=q_a)
+
+                ws.merge_cells(start_row=r_start, start_column=12, end_row=r_end, end_column=12)
+                ws.cell(row=r_start, column=12, value=qui_a)
+
+                ws.merge_cells(start_row=r_start, start_column=15, end_row=r_end, end_column=15)
+                ws.cell(row=r_start, column=15, value=sex_a)
+
+                ws.merge_cells(start_row=r_start, start_column=19, end_row=r_end, end_column=19)
+                ws.cell(row=r_start, column=19, value=tot_anual)
+
+                ws.merge_cells(start_row=r_start, start_column=20, end_row=r_end, end_column=20)
+                ws.cell(row=r_start, column=20, value=prev)
+
+                ws.merge_cells(start_row=r_start, start_column=21, end_row=r_end, end_column=21)
+                ws.cell(row=r_start, column=21, value=sit_txt)
+
+                for idx, e in enumerate([1, 2, 3]):
+                    r = r_start + idx
+                    s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                    t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                    q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                    qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                    sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+
+                    s_t, t_t, q_t, qui_t, sex_t = s_a * s_d, t_a * t_d, q_a * q_d, qui_a * qui_d, sex_a * sex_d
+                    tot_etapa = s_t + t_t + q_t + qui_t + sex_t
+
+                    ws.cell(row=r, column=2, value=e)
+                    ws.cell(row=r, column=4, value=s_d)
+                    ws.cell(row=r, column=5, value=s_t)
+                    ws.cell(row=r, column=7, value=t_d)
+                    ws.cell(row=r, column=8, value=t_t)
+                    ws.cell(row=r, column=10, value=q_d)
+                    ws.cell(row=r, column=11, value=q_t)
+                    ws.cell(row=r, column=13, value=qui_d)
+                    ws.cell(row=r, column=14, value=qui_t)
+                    ws.cell(row=r, column=16, value=sex_d)
+                    ws.cell(row=r, column=17, value=sex_t)
+                    ws.cell(row=r, column=18, value=tot_etapa)
+
+                # Formatação de bordas e estilos do bloco
+                for r in range(r_start, r_end + 1):
                     for c in range(1, 22):
                         cell = ws.cell(row=r, column=c)
-                        cell.fill = header_sub_fill
-                        cell.font = font_header
                         cell.alignment = align_center
-                        cell.border = border_header
+                        cell.border = border_cell
+                        cell.fill = bg_fill
+                        cell.font = font_regular
+                        # Destaques especiais
+                        if c in [3, 6, 9, 12, 15] and cell.value and cell.value > 0:
+                            cell.fill = destaque_fill
+                            cell.font = font_bold
+                        elif c in [1, 18, 19, 20]:
+                            cell.font = font_bold
+                        if c == 21:
+                            cell.fill = sit_fill
+                            cell.font = sit_font
 
-                current_row = 4
-                for pos, (orig_idx, item) in enumerate(lancamentos_turma):
-                    mat = item["materia"]
-                    prev = item["previsto"]
-                    s_a, t_a, q_a, qui_a, sex_a = item["Seg"], item["Ter"], item["Qua"], item["Qui"], item["Sex"]
-                    bg_fill = materia_bg_1 if pos % 2 == 0 else materia_bg_0
+                current_row += 3
 
-                    tot_anual = 0
-                    for e in [1, 2, 3]:
-                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-                        tot_anual += (s_a * s_d) + (t_a * t_d) + (q_a * q_d) + (qui_a * qui_d) + (sex_a * sex_d)
+            # Larguras das colunas
+            ws.column_dimensions["A"].width = 24
+            ws.column_dimensions["B"].width = 8
+            for col in ["C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"]:
+                ws.column_dimensions[col].width = 11
+            ws.column_dimensions["R"].width = 16
+            ws.column_dimensions["S"].width = 14
+            ws.column_dimensions["T"].width = 14
+            ws.column_dimensions["U"].width = 16
 
-                    dif = tot_anual - prev
-                    sit_txt = "OK" if dif == 0 else (f"EXCESSO (+{dif})" if dif > 0 else f"FALTA ({dif})")
-                    sit_font = font_ok if dif == 0 else font_err
-                    sit_fill = ok_fill if dif == 0 else err_fill
-
-                    # Preenchimento das 3 linhas do componente
-                    r_start = current_row
-                    r_end = current_row + 2
-
-                    ws.merge_cells(start_row=r_start, start_column=1, end_row=r_end, end_column=1)
-                    ws.cell(row=r_start, column=1, value=mat)
-
-                    ws.merge_cells(start_row=r_start, start_column=3, end_row=r_end, end_column=3)
-                    ws.cell(row=r_start, column=3, value=s_a)
-
-                    ws.merge_cells(start_row=r_start, start_column=6, end_row=r_end, end_column=6)
-                    ws.cell(row=r_start, column=6, value=t_a)
-
-                    ws.merge_cells(start_row=r_start, start_column=9, end_row=r_end, end_column=9)
-                    ws.cell(row=r_start, column=9, value=q_a)
-
-                    ws.merge_cells(start_row=r_start, start_column=12, end_row=r_end, end_column=12)
-                    ws.cell(row=r_start, column=12, value=qui_a)
-
-                    ws.merge_cells(start_row=r_start, start_column=15, end_row=r_end, end_column=15)
-                    ws.cell(row=r_start, column=15, value=sex_a)
-
-                    ws.merge_cells(start_row=r_start, start_column=19, end_row=r_end, end_column=19)
-                    ws.cell(row=r_start, column=19, value=tot_anual)
-
-                    ws.merge_cells(start_row=r_start, start_column=20, end_row=r_end, end_column=20)
-                    ws.cell(row=r_start, column=20, value=prev)
-
-                    ws.merge_cells(start_row=r_start, start_column=21, end_row=r_end, end_column=21)
-                    ws.cell(row=r_start, column=21, value=sit_txt)
-
-                    for idx, e in enumerate([1, 2, 3]):
-                        r = r_start + idx
-                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-
-                        s_t, t_t, q_t, qui_t, sex_t = s_a * s_d, t_a * t_d, q_a * q_d, qui_a * qui_d, sex_a * sex_d
-                        tot_etapa = s_t + t_t + q_t + qui_t + sex_t
-
-                        ws.cell(row=r, column=2, value=e)
-                        ws.cell(row=r, column=4, value=s_d)
-                        ws.cell(row=r, column=5, value=s_t)
-
-                        ws.cell(row=r, column=7, value=t_d)
-                        ws.cell(row=r, column=8, value=t_t)
-
-                        ws.cell(row=r, column=10, value=q_d)
-                        ws.cell(row=r, column=11, value=q_t)
-
-                        ws.cell(row=r, column=13, value=qui_d)
-                        ws.cell(row=r, column=14, value=qui_t)
-
-                        ws.cell(row=r, column=16, value=sex_d)
-                        ws.cell(row=r, column=17, value=sex_t)
-
-                        ws.cell(row=r, column=18, value=tot_etapa)
-
-                    # Formatação de bordas e estilos do bloco
-                    for r in range(r_start, r_end + 1):
-                        for c in range(1, 22):
-                            cell = ws.cell(row=r, column=c)
-                            cell.alignment = align_center
-                            cell.border = border_cell
-                            cell.fill = bg_fill
-                            cell.font = font_regular
-
-                            # Destaques especiais
-                            if c in [3, 6, 9, 12, 15] and cell.value and cell.value > 0:
-                                cell.fill = destaque_fill
-                                cell.font = font_bold
-                            elif c in [1, 18, 19, 20]:
-                                cell.font = font_bold
-
-                            if c == 21:
-                                cell.fill = sit_fill
-                                cell.font = sit_font
-
-                    current_row += 3
-
-                # Larguras das colunas
-                ws.column_dimensions["A"].width = 24
-                ws.column_dimensions["B"].width = 8
-                for col in ["C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"]:
-                    ws.column_dimensions[col].width = 11
-                ws.column_dimensions["R"].width = 16
-                ws.column_dimensions["S"].width = 14
-                ws.column_dimensions["T"].width = 14
-                ws.column_dimensions["U"].width = 16
-
-                excel_buffer = io.BytesIO()
-                wb.save(excel_buffer)
-
-                st.download_button(
-                    label="📥 Baixar Planilha Padrão (.xlsx)",
-                    data=excel_buffer.getvalue(),
-                    file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-
-        with c_exp2:
-            if HAS_REPORTLAB:
-                pdf_buffer = io.BytesIO()
-                doc = SimpleDocTemplate(
-                    pdf_buffer,
-                    pagesize=landscape(A4),
-                    rightMargin=20,
-                    leftMargin=20,
-                    topMargin=20,
-                    bottomMargin=20,
-                )
-
-                elements = []
-                styles = getSampleStyleSheet()
-
-                title_style = ParagraphStyle(
-                    "PdfTitle",
-                    parent=styles["Normal"],
-                    fontName="Helvetica-Bold",
-                    fontSize=14,
-                    leading=16,
-                    textColor=colors.whitesmoke,
-                    alignment=1,
-                )
-
-                table_data = [[
-                    Paragraph(
-                        f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}",
-                        title_style,
-                    )
-                ]]
-                pdf_table = Table(table_data, colWidths=[780])
-                pdf_table.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0d2b59")),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                    ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ]))
-
-                elements.append(pdf_table)
-
-                pdf_table_data = [[
-                    "Componente Curricular",
-                    "Etapa",
-                    "Seg",
-                    "Ter",
-                    "Qua",
-                    "Qui",
-                    "Sex",
-                    "Nº Aulas/Etapa",
-                    "Total Aulas",
-                    "Aulas Anual",
-                    "Situação",
-                ]]
-
-                cell_style = ParagraphStyle(
-                    "PdfCell",
-                    parent=styles["Normal"],
-                    fontName="Helvetica",
-                    fontSize=8,
-                    leading=10,
-                    alignment=1,
-                )
-                cell_bold = ParagraphStyle(
-                    "PdfCellBold",
-                    parent=styles["Normal"],
-                    fontName="Helvetica-Bold",
-                    fontSize=8,
-                    leading=10,
-                    alignment=1,
-                )
-
-                for orig_idx, item in lancamentos_turma:
-                    mat = item["materia"]
-                    prev = item["previsto"]
-                    s_a, t_a, q_a, qui_a, sex_a = (
-                        item["Seg"],
-                        item["Ter"],
-                        item["Qua"],
-                        item["Qui"],
-                        item["Sex"],
-                    )
-
-                    tot_anual = 0
-                    for e in [1, 2, 3]:
-                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-                        tot_anual += (
-                            (s_a * s_d)
-                            + (t_a * t_d)
-                            + (q_a * q_d)
-                            + (qui_a * qui_d)
-                            + (sex_a * sex_d)
-                        )
-
-                    dif = tot_anual - prev
-                    sit_txt = (
-                        "OK"
-                        if dif == 0
-                        else (f"EXCESSO (+{dif})" if dif > 0 else f"FALTA ({dif})")
-                    )
-
-                    for e in [1, 2, 3]:
-                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-
-                        tot_etapa = (
-                            (s_a * s_d)
-                            + (t_a * t_d)
-                            + (q_a * q_d)
-                            + (qui_a * qui_d)
-                            + (sex_a * sex_d)
-                        )
-
-                        pdf_table_data.append([
-                            Paragraph(mat if e == 1 else "", cell_bold),
-                            Paragraph(str(e), cell_style),
-                            Paragraph(str(s_a) if e == 1 else "", cell_style),
-                            Paragraph(str(t_a) if e == 1 else "", cell_style),
-                            Paragraph(str(q_a) if e == 1 else "", cell_style),
-                            Paragraph(str(qui_a) if e == 1 else "", cell_style),
-                            Paragraph(str(sex_a) if e == 1 else "", cell_style),
-                            Paragraph(str(tot_etapa), cell_bold),
-                            Paragraph(str(tot_anual) if e == 1 else "", cell_bold),
-                            Paragraph(str(prev) if e == 1 else "", cell_bold),
-                            Paragraph(sit_txt if e == 1 else "", cell_style),
-                        ])
-
-                data_table = Table(
-                    pdf_table_data,
-                    colWidths=[150, 40, 40, 40, 40, 40, 40, 80, 70, 70, 90],
-                )
-                data_table.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1b55a8")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 9),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ]))
-
-                elements.append(Spacer(1, 10))
-                elements.append(data_table)
-
-                doc.build(elements)
-
-                st.download_button(
-                    label="📄 Baixar Relatório em PDF (.pdf)",
-                    data=pdf_buffer.getvalue(),
-                    file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.pdf",
-                    mime="application/pdf",
-                )
-
+            excel_buffer = io.BytesIO()
+            wb.save(excel_buffer)
+            st.download_button(
+                label="📥 Baixar Planilha Padrão (.xlsx)",
+                data=excel_buffer.getvalue(),
+                file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
     else:
         st.info(
             f"Nenhuma disciplina lançada para a Turma {st.session_state.turma_atual}."
