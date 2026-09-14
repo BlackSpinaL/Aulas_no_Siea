@@ -581,6 +581,120 @@ with aba1:
 
                 elements.append(pdf_table)
 
+                pdf_table_data = [[
+                    "Componente Curricular",
+                    "Etapa",
+                    "Seg",
+                    "Ter",
+                    "Qua",
+                    "Qui",
+                    "Sex",
+                    "Nº Aulas/Etapa",
+                    "Total Aulas",
+                    "Aulas Anual",
+                    "Situação",
+                ]]
+
+                cell_style = ParagraphStyle(
+                    "PdfCell",
+                    parent=styles["Normal"],
+                    fontName="Helvetica",
+                    fontSize=8,
+                    leading=10,
+                    alignment=1,
+                )
+                cell_bold = ParagraphStyle(
+                    "PdfCellBold",
+                    parent=styles["Normal"],
+                    fontName="Helvetica-Bold",
+                    fontSize=8,
+                    leading=10,
+                    alignment=1,
+                )
+
+                for orig_idx, item in lancamentos_turma:
+                    mat = item["materia"]
+                    prev = item["previsto"]
+                    s_a, t_a, q_a, qui_a, sex_a = (
+                        item["Seg"],
+                        item["Ter"],
+                        item["Qua"],
+                        item["Qui"],
+                        item["Sex"],
+                    )
+
+                    tot_anual = 0
+                    for e in [1, 2, 3]:
+                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+                        tot_anual += (
+                            (s_a * s_d)
+                            + (t_a * t_d)
+                            + (q_a * q_d)
+                            + (qui_a * qui_d)
+                            + (sex_a * sex_d)
+                        )
+
+                    dif = tot_anual - prev
+                    sit_txt = (
+                        "OK"
+                        if dif == 0
+                        else (f"EXCESSO (+{dif})" if dif > 0 else f"FALTA ({dif})")
+                    )
+
+                    for e in [1, 2, 3]:
+                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+
+                        tot_etapa = (
+                            (s_a * s_d)
+                            + (t_a * t_d)
+                            + (q_a * q_d)
+                            + (qui_a * qui_d)
+                            + (sex_a * sex_d)
+                        )
+
+                        pdf_table_data.append([
+                            Paragraph(mat if e == 1 else "", cell_bold),
+                            Paragraph(str(e), cell_style),
+                            Paragraph(str(s_a), cell_style),
+                            Paragraph(str(t_a), cell_style),
+                            Paragraph(str(q_a), cell_style),
+                            Paragraph(str(qui_a), cell_style),
+                            Paragraph(str(sex_a), cell_style),
+                            Paragraph(str(tot_etapa), cell_bold),
+                            Paragraph(str(tot_anual) if e == 1 else "", cell_bold),
+                            Paragraph(str(prev) if e == 1 else "", cell_bold),
+                            Paragraph(sit_txt if e == 1 else "", cell_style),
+                        ])
+
+                data_table = Table(
+                    pdf_table_data,
+                    colWidths=[150, 40, 40, 40, 40, 40, 40, 80, 70, 70, 90],
+                )
+                data_table.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1b55a8")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 9),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ]))
+
+                elements.append(Spacer(1, 10))
+                elements.append(data_table)
+
+                doc.build(elements)
+
                 st.download_button(
                     label="📄 Baixar Relatório em PDF (.pdf)",
                     data=pdf_buffer.getvalue(),
