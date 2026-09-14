@@ -2,7 +2,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-# Tentar importar ReportLab para geração nativa de PDF
+# Tentar importar ReportLab para geração de PDF
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -83,7 +83,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Configurações do Session State
+# Inicialização do Session State
 if "ano_letivo" not in st.session_state:
     st.session_state.ano_letivo = 2026
 
@@ -92,6 +92,9 @@ if "turmas" not in st.session_state:
 
 if "turma_atual" not in st.session_state:
     st.session_state.turma_atual = "12101"
+
+if "editing_idx" not in st.session_state:
+    st.session_state.editing_idx = None
 
 DISCIPLINAS_PADRAO = [
     "ARTE",
@@ -176,10 +179,19 @@ with aba2:
                 st.rerun()
 
         turma_rem = st.selectbox(
-            "Remover Turma:", ["-- Selecione --"] + st.session_state.turmas
+            "Excluir Turma Definitivamente:",
+            ["-- Selecione --"] + st.session_state.turmas,
         )
-        if st.button("🗑️ Remover Turma") and turma_rem != "-- Selecione --":
+        if st.button("🗑️ Deletar Turma") and turma_rem != "-- Selecione --":
             st.session_state.turmas.remove(turma_rem)
+            # Remove lançamentos associados à turma excluída
+            st.session_state.lancamentos = [
+                l
+                for l in st.session_state.lancamentos
+                if l.get("turma") != turma_rem
+            ]
+            if st.session_state.turmas:
+                st.session_state.turma_atual = st.session_state.turmas[0]
             st.rerun()
 
     with col_cfg3:
@@ -214,51 +226,115 @@ with aba1:
             "📍 Selecione a Turma para Conferência:", st.session_state.turmas
         )
 
-    st.markdown("### ✏️ Lançar Matéria na Grade")
-    c_m, c_prev, c_seg, c_ter, c_qua, c_qui, c_sex = st.columns(
-        [2.5, 1.2, 1, 1, 1, 1, 1]
-    )
-    with c_m:
-        mat_escolhida = st.selectbox(
-            "Componente Curricular:",
-            ["-- Selecione --"] + st.session_state.disciplinas,
-        )
-    with c_prev:
-        aulas_anual_prevista = st.number_input(
-            "Aulas Anual:", min_value=0, value=80, step=10
-        )
-    with c_seg:
-        seg = st.number_input("Segunda", min_value=0, max_value=10, value=0)
-    with c_ter:
-        ter = st.number_input("Terça", min_value=0, max_value=10, value=0)
-    with c_qua:
-        qua = st.number_input("Quarta", min_value=0, max_value=10, value=0)
-    with c_qui:
-        qui = st.number_input("Quinta", min_value=0, max_value=10, value=0)
-    with c_sex:
-        sex = st.number_input("Sexta", min_value=0, max_value=10, value=0)
+    # SEÇÃO DE EDIÇÃO OU NOVO LANÇAMENTO
+    if st.session_state.editing_idx is not None:
+        st.markdown("### ✏️ Editando Disciplina Lançada")
+        item_edit = st.session_state.lancamentos[st.session_state.editing_idx]
 
-    if st.button("📥 Lançar na Grade"):
-        if mat_escolhida != "-- Selecione --":
-            st.session_state.lancamentos.append({
-                "turma": st.session_state.turma_atual,
-                "materia": mat_escolhida,
-                "previsto": aulas_anual_prevista,
-                "Seg": seg,
-                "Ter": ter,
-                "Qua": qua,
-                "Qui": qui,
-                "Sex": sex,
-            })
-            st.success(f"'{mat_escolhida}' lançada com sucesso!")
-            st.rerun()
+        c_m, c_prev, c_seg, c_ter, c_qua, c_qui, c_sex = st.columns(
+            [2.5, 1.2, 1, 1, 1, 1, 1]
+        )
+        with c_m:
+            mat_e = st.text_input(
+                "Componente Curricular:",
+                value=item_edit["materia"],
+                disabled=True,
+            )
+        with c_prev:
+            prev_e = st.number_input(
+                "Aulas Anual:",
+                min_value=0,
+                value=item_edit["previsto"],
+                step=10,
+            )
+        with c_seg:
+            seg_e = st.number_input(
+                "Segunda", min_value=0, max_value=10, value=item_edit["Seg"]
+            )
+        with c_ter:
+            ter_e = st.number_input(
+                "Terça", min_value=0, max_value=10, value=item_edit["Ter"]
+            )
+        with c_qua:
+            qua_e = st.number_input(
+                "Quarta", min_value=0, max_value=10, value=item_edit["Qua"]
+            )
+        with c_qui:
+            qui_e = st.number_input(
+                "Quinta", min_value=0, max_value=10, value=item_edit["Qui"]
+            )
+        with c_sex:
+            sex_e = st.number_input(
+                "Sexta", min_value=0, max_value=10, value=item_edit["Sex"]
+            )
+
+        col_sav1, col_sav2 = st.columns([1, 4])
+        with col_sav1:
+            if st.button("💾 Salvar Alterações"):
+                st.session_state.lancamentos[st.session_state.editing_idx] = {
+                    "turma": st.session_state.turma_atual,
+                    "materia": item_edit["materia"],
+                    "previsto": prev_e,
+                    "Seg": seg_e,
+                    "Ter": ter_e,
+                    "Qua": qua_e,
+                    "Qui": qui_e,
+                    "Sex": sex_e,
+                }
+                st.session_state.editing_idx = None
+                st.success("Alterações salvas com sucesso!")
+                st.rerun()
+        with col_sav2:
+            if st.button("❌ Cancelar Edição"):
+                st.session_state.editing_idx = None
+                st.rerun()
+
+    else:
+        st.markdown("### ✏️ Lançar Matéria na Grade")
+        c_m, c_prev, c_seg, c_ter, c_qua, c_qui, c_sex = st.columns(
+            [2.5, 1.2, 1, 1, 1, 1, 1]
+        )
+        with c_m:
+            mat_escolhida = st.selectbox(
+                "Componente Curricular:",
+                ["-- Selecione --"] + st.session_state.disciplinas,
+            )
+        with c_prev:
+            aulas_anual_prevista = st.number_input(
+                "Aulas Anual:", min_value=0, value=80, step=10
+            )
+        with c_seg:
+            seg = st.number_input("Segunda", min_value=0, max_value=10, value=0)
+        with c_ter:
+            ter = st.number_input("Terça", min_value=0, max_value=10, value=0)
+        with c_qua:
+            qua = st.number_input("Quarta", min_value=0, max_value=10, value=0)
+        with c_qui:
+            qui = st.number_input("Quinta", min_value=0, max_value=10, value=0)
+        with c_sex:
+            sex = st.number_input("Sexta", min_value=0, max_value=10, value=0)
+
+        if st.button("📥 Lançar na Grade"):
+            if mat_escolhida != "-- Selecione --":
+                st.session_state.lancamentos.append({
+                    "turma": st.session_state.turma_atual,
+                    "materia": mat_escolhida,
+                    "previsto": aulas_anual_prevista,
+                    "Seg": seg,
+                    "Ter": ter,
+                    "Qua": qua,
+                    "Qui": qui,
+                    "Sex": sex,
+                })
+                st.success(f"'{mat_escolhida}' lançada com sucesso!")
+                st.rerun()
 
     st.markdown("---")
 
     # Filtrar lançamentos da turma selecionada
     lancamentos_turma = [
-        (idx, item)
-        for idx, item in enumerate(st.session_state.lancamentos)
+        (orig_idx, item)
+        for orig_idx, item in enumerate(st.session_state.lancamentos)
         if item.get("turma", st.session_state.turma_atual)
         == st.session_state.turma_atual
     ]
@@ -266,196 +342,184 @@ with aba1:
     dias_map = st.session_state.dias_etapas.set_index("Dia da Semana")
 
     if lancamentos_turma:
-        col_tab, col_actions = st.columns([5, 1])
+        # Tabela HTML com cabeçalho contendo coluna AÇÕES
+        titulo_grade = f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}"
 
-        with col_tab:
-            # Cabeçalho formatado com Turma e Ano
-            titulo_grade = f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}"
+        html_code = f"""
+        <table class="excel-table">
+            <thead>
+                <tr>
+                    <th colspan="21" class="header-main">{titulo_grade}</th>
+                </tr>
+                <tr>
+                    <th rowspan="2" style="width: 15%;">Componente Curricular</th>
+                    <th rowspan="2" style="width: 4%;">Etapa</th>
+                    <th colspan="3">Segunda</th>
+                    <th colspan="3">Terça</th>
+                    <th colspan="3">Quarta</th>
+                    <th colspan="3">Quinta</th>
+                    <th colspan="3">Sexta</th>
+                    <th rowspan="2">Nº aulas<br>por etapa</th>
+                    <th rowspan="2">TOTAL<br>AULAS</th>
+                    <th rowspan="2">AULAS<br>ANUAL</th>
+                    <th rowspan="2">SITUAÇÃO</th>
+                </tr>
+                <tr>
+                    <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
+                    <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
+                    <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
+                    <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
+                    <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
 
-            html_code = f"""
-            <table class="excel-table">
-                <thead>
-                    <tr>
-                        <th colspan="20" class="header-main">{titulo_grade}</th>
-                    </tr>
-                    <tr>
-                        <th rowspan="2" style="width: 15%;">Componente Curricular</th>
-                        <th rowspan="2" style="width: 4%;">Etapa</th>
-                        <th colspan="3">Segunda</th>
-                        <th colspan="3">Terça</th>
-                        <th colspan="3">Quarta</th>
-                        <th colspan="3">Quinta</th>
-                        <th colspan="3">Sexta</th>
-                        <th rowspan="2">Nº aulas<br>por etapa</th>
-                        <th rowspan="2">TOTAL<br>AULAS</th>
-                        <th rowspan="2">AULAS<br>ANUAL</th>
-                        <th rowspan="2">SITUAÇÃO</th>
-                    </tr>
-                    <tr>
-                        <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
-                        <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
-                        <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
-                        <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
-                        <th>Nº aulas</th><th>Nº/etapa</th><th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
+        for pos, (orig_idx, item) in enumerate(lancamentos_turma):
+            mat = item["materia"]
+            prev = item["previsto"]
+            s_a, t_a, q_a, qui_a, sex_a = (
+                item["Seg"],
+                item["Ter"],
+                item["Qua"],
+                item["Qui"],
+                item["Sex"],
+            )
 
-            for pos, (orig_idx, item) in enumerate(lancamentos_turma):
-                mat = item["materia"]
-                prev = item["previsto"]
-                s_a, t_a, q_a, qui_a, sex_a = (
-                    item["Seg"],
-                    item["Ter"],
-                    item["Qua"],
-                    item["Qui"],
-                    item["Sex"],
+            bg_class = "row-materia-1" if pos % 2 == 0 else "row-materia-0"
+
+            tot_anual = 0
+            for e in [1, 2, 3]:
+                s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+                tot_anual += (
+                    (s_a * s_d)
+                    + (t_a * t_d)
+                    + (q_a * q_d)
+                    + (qui_a * qui_d)
+                    + (sex_a * sex_d)
                 )
 
-                bg_class = (
-                    "row-materia-1" if pos % 2 == 0 else "row-materia-0"
+            dif = tot_anual - prev
+            if dif == 0:
+                sit_txt, sit_class = "✅ OK", "status-ok"
+            elif dif > 0:
+                sit_txt, sit_class = f"⚠️ EXCESSO (+{dif})", "status-err"
+            else:
+                sit_txt, sit_class = f"❌ FALTA ({dif})", "status-err"
+
+            for e in [1, 2, 3]:
+                s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+
+                s_t, t_t, q_t, qui_t, sex_t = (
+                    s_a * s_d,
+                    t_a * t_d,
+                    q_a * q_d,
+                    qui_a * qui_d,
+                    sex_a * sex_d,
+                )
+                tot_etapa = s_t + t_t + q_t + qui_t + sex_t
+
+                s_a_h = (
+                    f'<td class="{bg_class} aula-destaque">{s_a}</td>'
+                    if s_a > 0
+                    else f'<td class="{bg_class}">{s_a}</td>'
+                )
+                t_a_h = (
+                    f'<td class="{bg_class} aula-destaque">{t_a}</td>'
+                    if t_a > 0
+                    else f'<td class="{bg_class}">{t_a}</td>'
+                )
+                q_a_h = (
+                    f'<td class="{bg_class} aula-destaque">{q_a}</td>'
+                    if q_a > 0
+                    else f'<td class="{bg_class}">{q_a}</td>'
+                )
+                qui_a_h = (
+                    f'<td class="{bg_class} aula-destaque">{qui_a}</td>'
+                    if qui_a > 0
+                    else f'<td class="{bg_class}">{qui_a}</td>'
+                )
+                sex_a_h = (
+                    f'<td class="{bg_class} aula-destaque">{sex_a}</td>'
+                    if sex_a > 0
+                    else f'<td class="{bg_class}">{sex_a}</td>'
                 )
 
-                tot_anual = 0
-                for e in [1, 2, 3]:
-                    s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                    t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                    q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                    qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                    sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-                    tot_anual += (
-                        (s_a * s_d)
-                        + (t_a * t_d)
-                        + (q_a * q_d)
-                        + (qui_a * qui_d)
-                        + (sex_a * sex_d)
-                    )
+                html_code += f'<tr class="{bg_class}">'
 
-                dif = tot_anual - prev
-                if dif == 0:
-                    sit_txt, sit_class = "✅ OK", "status-ok"
-                elif dif > 0:
-                    sit_txt, sit_class = f"⚠️ EXCESSO (+{dif})", "status-err"
-                else:
-                    sit_txt, sit_class = f"❌ FALTA ({dif})", "status-err"
-
-                for e in [1, 2, 3]:
-                    s_d = dias_map.loc["Segunda", f"Etapa {e}"]
-                    t_d = dias_map.loc["Terça", f"Etapa {e}"]
-                    q_d = dias_map.loc["Quarta", f"Etapa {e}"]
-                    qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
-                    sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
-
-                    s_t, t_t, q_t, qui_t, sex_t = (
-                        s_a * s_d,
-                        t_a * t_d,
-                        q_a * q_d,
-                        qui_a * qui_d,
-                        sex_a * sex_d,
-                    )
-                    tot_etapa = s_t + t_t + q_t + qui_t + sex_t
-
-                    s_a_h = (
-                        f'<td class="{bg_class} aula-destaque">{s_a}</td>'
-                        if s_a > 0
-                        else f'<td class="{bg_class}">{s_a}</td>'
-                    )
-                    t_a_h = (
-                        f'<td class="{bg_class} aula-destaque">{t_a}</td>'
-                        if t_a > 0
-                        else f'<td class="{bg_class}">{t_a}</td>'
-                    )
-                    q_a_h = (
-                        f'<td class="{bg_class} aula-destaque">{q_a}</td>'
-                        if q_a > 0
-                        else f'<td class="{bg_class}">{q_a}</td>'
-                    )
-                    qui_a_h = (
-                        f'<td class="{bg_class} aula-destaque">{qui_a}</td>'
-                        if qui_a > 0
-                        else f'<td class="{bg_class}">{qui_a}</td>'
-                    )
-                    sex_a_h = (
-                        f'<td class="{bg_class} aula-destaque">{sex_a}</td>'
-                        if sex_a > 0
-                        else f'<td class="{bg_class}">{sex_a}</td>'
-                    )
-
-                    html_code += f'<tr class="{bg_class}">'
-
-                    if e == 1:
-                        html_code += (
-                            f'<td rowspan="3" style="font-weight:bold;">{mat}</td>'
-                        )
-
-                    html_code += f"<td>{e}</td>"
+                if e == 1:
                     html_code += (
-                        f"{s_a_h}<td>{s_d}</td><td>{s_t}</td>"
-                        f"{t_a_h}<td>{t_d}</td><td>{t_t}</td>"
-                        f"{q_a_h}<td>{q_d}</td><td>{q_t}</td>"
-                        f"{qui_a_h}<td>{qui_d}</td><td>{qui_t}</td>"
-                        f"{sex_a_h}<td>{sex_d}</td><td>{sex_t}</td>"
-                        f'<td style="font-weight:bold;">{tot_etapa}</td>'
+                        f'<td rowspan="3" style="font-weight:bold;">{mat}</td>'
                     )
 
-                    if e == 1:
-                        html_code += (
-                            f'<td rowspan="3" style="font-weight:bold; font-size:14px;">{tot_anual}</td>'
-                            f'<td rowspan="3" style="font-weight:bold; font-size:14px;">{prev}</td>'
-                            f'<td rowspan="3" class="{sit_class}">{sit_txt}</td>'
-                        )
+                html_code += f"<td>{e}</td>"
+                html_code += (
+                    f"{s_a_h}<td>{s_d}</td><td>{s_t}</td>"
+                    f"{t_a_h}<td>{t_d}</td><td>{t_t}</td>"
+                    f"{q_a_h}<td>{q_d}</td><td>{q_t}</td>"
+                    f"{qui_a_h}<td>{qui_d}</td><td>{qui_t}</td>"
+                    f"{sex_a_h}<td>{sex_d}</td><td>{sex_t}</td>"
+                    f'<td style="font-weight:bold;">{tot_etapa}</td>'
+                )
 
-                    html_code += "</tr>"
+                if e == 1:
+                    html_code += (
+                        f'<td rowspan="3" style="font-weight:bold; font-size:14px;">{tot_anual}</td>'
+                        f'<td rowspan="3" style="font-weight:bold; font-size:14px;">{prev}</td>'
+                        f'<td rowspan="3" class="{sit_class}">{sit_txt}</td>'
+                    )
 
-            html_code += "</tbody></table>"
-            st.markdown(html_code, unsafe_allow_html=True)
+                html_code += "</tr>"
 
-        # Painel lateral para excluir matérias específicas
-        with col_actions:
-            st.markdown("### 🛠️ Opções")
-            st.write("**Excluir Matéria:**")
-            for pos, (orig_idx, item) in enumerate(lancamentos_turma):
-                if st.button(
-                    f"🗑️ Deletar #{pos+1} ({item['materia']})",
-                    key=f"del_{orig_idx}",
-                ):
-                    st.session_state.lancamentos.pop(orig_idx)
-                    st.rerun()
+        html_code += "</tbody></table>"
+        st.markdown(html_code, unsafe_allow_html=True)
 
-            st.markdown("---")
-            if st.button("🗑️ Limpar Turma"):
-                st.session_state.lancamentos = [
-                    it
-                    for it in st.session_state.lancamentos
-                    if it.get("turma") != st.session_state.turma_atual
-                ]
-                st.rerun()
+        st.markdown("### ⚙️ Ações para cada Disciplina")
+        st.caption(
+            "Selecione o que deseja fazer com cada componente curricular nesta turma:"
+        )
 
-        # Botões de Exportação (PDF e Excel)
+        cols_btn = st.columns(len(lancamentos_turma))
+        for pos, (orig_idx, item) in enumerate(lancamentos_turma):
+            with cols_btn[pos if pos < len(cols_btn) else 0]:
+                st.markdown(f"**{item['materia']}**")
+                col_e, col_d = st.columns([1, 1])
+                with col_e:
+                    if st.button("✏️ Editar", key=f"btn_edit_{orig_idx}"):
+                        st.session_state.editing_idx = orig_idx
+                        st.rerun()
+                with col_d:
+                    if st.button("🗑️ Deletar", key=f"btn_del_{orig_idx}"):
+                        st.session_state.lancamentos.pop(orig_idx)
+                        st.rerun()
+
+        # Botões para Download
         st.markdown("---")
         c_exp1, c_exp2 = st.columns([1, 1])
 
         with c_exp1:
-            # Exportação Excel
-            rows_excel = []
-            for _, item in lancamentos_turma:
-                rows_excel.append(item)
+            rows_excel = [item for _, item in lancamentos_turma]
             df_exp = pd.DataFrame(rows_excel)
-
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
                 df_exp.to_excel(writer, index=False, sheet_name="Lançamentos")
 
             st.download_button(
-                label="📥 Baixar Planilha (.xlsx)",
+                label="📥 Baixar Planilha em Excel (.xlsx)",
                 data=buffer_excel.getvalue(),
                 file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
         with c_exp2:
-            # Exportação PDF
             if HAS_REPORTLAB:
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
@@ -480,20 +544,13 @@ with aba1:
                     alignment=1,
                 )
 
-                # Construir tabela do PDF
-                table_data = [
-                    [
-                        Paragraph(
-                            f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}",
-                            title_style,
-                        )
-                    ]
-                ]
-
-                # Tabela de cabeçalho PDF
-                pdf_table = Table(
-                    table_data, colWidths=[780]
-                )  # A4 Paisagem ~ 842pt
+                table_data = [[
+                    Paragraph(
+                        f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}",
+                        title_style,
+                    )
+                ]]
+                pdf_table = Table(table_data, colWidths=[780])
                 pdf_table.setStyle(TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0d2b59")),
                     ("ALIGN", (0, 0), (-1, -1), "CENTER"),
@@ -509,10 +566,6 @@ with aba1:
                     data=pdf_buffer.getvalue(),
                     file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.pdf",
                     mime="application/pdf",
-                )
-            else:
-                st.info(
-                    "Dica: Para impressão em PDF, você também pode usar a função do navegador (Ctrl+P / Imprimir como PDF)."
                 )
 
     else:
