@@ -19,6 +19,16 @@ try:
 except ImportError:
     HAS_REPORTLAB = False
 
+# Tentar importar openpyxl para formatação avançada do Excel
+try:
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+
 st.set_page_config(
     page_title="Conferência dos Diários",
     layout="wide",
@@ -77,6 +87,23 @@ st.markdown(
     background-color: #ffcdd2 !important;
     color: #c62828 !important;
     font-weight: bold;
+}
+.action-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+.action-table th {
+    background-color: #0d2b59;
+    color: white;
+    padding: 6px;
+    font-size: 13px;
+    text-align: left;
+}
+.action-table td {
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+    background-color: #f9f9f9;
 }
 </style>
 """,
@@ -208,7 +235,6 @@ with aba2:
     st.markdown("---")
     st.markdown("### 4. Dias de cada Etapa (Calendário Escolar)")
 
-    # Edição do calendário escolar
     df_editvel = st.data_editor(
         st.session_state.dias_etapas,
         num_rows="fixed",
@@ -217,7 +243,6 @@ with aba2:
     )
     st.session_state.dias_etapas = df_editvel
 
-    # Cálculo dinâmico das somas de linhas (TOTAL DIAS) e colunas (TOTAL ETAPAS)
     df_calc = df_editvel.copy()
     df_calc["TOTAL DIAS"] = df_calc[["Etapa 1", "Etapa 2", "Etapa 3"]].sum(
         axis=1
@@ -355,7 +380,6 @@ with aba1:
 
     st.markdown("---")
 
-    # Filtrar lançamentos da turma selecionada
     lancamentos_turma = [
         (orig_idx, item)
         for orig_idx, item in enumerate(st.session_state.lancamentos)
@@ -366,14 +390,13 @@ with aba1:
     dias_map = st.session_state.dias_etapas.set_index("Dia da Semana")
 
     if lancamentos_turma:
-        # Cabeçalho da Tabela Principal
         titulo_grade = f"TURMA: {st.session_state.turma_atual} - PREVISÃO DE AULAS - {st.session_state.ano_letivo}"
 
         html_code = f"""
         <table class="excel-table">
             <thead>
                 <tr>
-                    <th colspan="20" class="header-main">{titulo_grade}</th>
+                    <th colspan="21" class="header-main">{titulo_grade}</th>
                 </tr>
                 <tr>
                     <th rowspan="2" style="width: 15%;">Componente Curricular</th>
@@ -429,11 +452,18 @@ with aba1:
 
             dif = tot_anual - prev
             if dif == 0:
-                sit_txt, sit_class = "✅ OK", "status-ok"
+                sit_txt, sit_class = "☑ OK", "status-ok"
             elif dif > 0:
                 sit_txt, sit_class = f"⚠️ EXCESSO (+{dif})", "status-err"
             else:
                 sit_txt, sit_class = f"❌ FALTA ({dif})", "status-err"
+
+            # Bolding / Highlight para células mescladas
+            s_a_h = f'<td rowspan="3" class="{bg_class} aula-destaque">{s_a}</td>' if s_a > 0 else f'<td rowspan="3" class="{bg_class}">{s_a}</td>'
+            t_a_h = f'<td rowspan="3" class="{bg_class} aula-destaque">{t_a}</td>' if t_a > 0 else f'<td rowspan="3" class="{bg_class}">{t_a}</td>'
+            q_a_h = f'<td rowspan="3" class="{bg_class} aula-destaque">{q_a}</td>' if q_a > 0 else f'<td rowspan="3" class="{bg_class}">{q_a}</td>'
+            qui_a_h = f'<td rowspan="3" class="{bg_class} aula-destaque">{qui_a}</td>' if qui_a > 0 else f'<td rowspan="3" class="{bg_class}">{qui_a}</td>'
+            sex_a_h = f'<td rowspan="3" class="{bg_class} aula-destaque">{sex_a}</td>' if sex_a > 0 else f'<td rowspan="3" class="{bg_class}">{sex_a}</td>'
 
             for e in [1, 2, 3]:
                 s_d = dias_map.loc["Segunda", f"Etapa {e}"]
@@ -451,48 +481,27 @@ with aba1:
                 )
                 tot_etapa = s_t + t_t + q_t + qui_t + sex_t
 
-                s_a_h = (
-                    f'<td class="{bg_class} aula-destaque">{s_a}</td>'
-                    if s_a > 0
-                    else f'<td class="{bg_class}">{s_a}</td>'
-                )
-                t_a_h = (
-                    f'<td class="{bg_class} aula-destaque">{t_a}</td>'
-                    if t_a > 0
-                    else f'<td class="{bg_class}">{t_a}</td>'
-                )
-                q_a_h = (
-                    f'<td class="{bg_class} aula-destaque">{q_a}</td>'
-                    if q_a > 0
-                    else f'<td class="{bg_class}">{q_a}</td>'
-                )
-                qui_a_h = (
-                    f'<td class="{bg_class} aula-destaque">{qui_a}</td>'
-                    if qui_a > 0
-                    else f'<td class="{bg_class}">{qui_a}</td>'
-                )
-                sex_a_h = (
-                    f'<td class="{bg_class} aula-destaque">{sex_a}</td>'
-                    if sex_a > 0
-                    else f'<td class="{bg_class}">{sex_a}</td>'
-                )
-
                 html_code += f'<tr class="{bg_class}">'
 
                 if e == 1:
-                    html_code += (
-                        f'<td rowspan="3" style="font-weight:bold;">{mat}</td>'
-                    )
+                    html_code += f'<td rowspan="3" style="font-weight:bold;">{mat}</td>'
 
                 html_code += f"<td>{e}</td>"
-                html_code += (
-                    f"{s_a_h}<td>{s_d}</td><td>{s_t}</td>"
-                    f"{t_a_h}<td>{t_d}</td><td>{t_t}</td>"
-                    f"{q_a_h}<td>{q_d}</td><td>{q_t}</td>"
-                    f"{qui_a_h}<td>{qui_d}</td><td>{qui_t}</td>"
-                    f"{sex_a_h}<td>{sex_d}</td><td>{sex_t}</td>"
-                    f'<td style="font-weight:bold;">{tot_etapa}</td>'
-                )
+
+                if e == 1:
+                    html_code += f"{s_a_h}<td>{s_d}</td><td>{s_t}</td>"
+                    html_code += f"{t_a_h}<td>{t_d}</td><td>{t_t}</td>"
+                    html_code += f"{q_a_h}<td>{q_d}</td><td>{q_t}</td>"
+                    html_code += f"{qui_a_h}<td>{qui_d}</td><td>{qui_t}</td>"
+                    html_code += f"{sex_a_h}<td>{sex_d}</td><td>{sex_t}</td>"
+                else:
+                    html_code += f"<td>{s_d}</td><td>{s_t}</td>"
+                    html_code += f"<td>{t_d}</td><td>{t_t}</td>"
+                    html_code += f"<td>{q_d}</td><td>{q_t}</td>"
+                    html_code += f"<td>{qui_d}</td><td>{qui_t}</td>"
+                    html_code += f"<td>{sex_d}</td><td>{sex_t}</td>"
+
+                html_code += f'<td style="font-weight:bold;">{tot_etapa}</td>'
 
                 if e == 1:
                     html_code += (
@@ -506,38 +515,240 @@ with aba1:
         html_code += "</tbody></table>"
         st.markdown(html_code, unsafe_allow_html=True)
 
+        # -------------------------------------------------------------
+        # AÇÕES PARA CADA DISCIPLINA ORGANIZADAS EM TABELA
+        # -------------------------------------------------------------
         st.markdown("### ⚙️ Ações para cada Disciplina")
-        cols_btn = st.columns(len(lancamentos_turma))
-        for pos, (orig_idx, item) in enumerate(lancamentos_turma):
-            with cols_btn[pos if pos < len(cols_btn) else 0]:
-                st.markdown(f"**{item['materia']}**")
-                col_e, col_d = st.columns([1, 1])
-                with col_e:
-                    if st.button("✏️ Editar", key=f"btn_edit_{orig_idx}"):
-                        st.session_state.editing_idx = orig_idx
-                        st.rerun()
-                with col_d:
-                    if st.button("🗑️ Deletar", key=f"btn_del_{orig_idx}"):
-                        st.session_state.lancamentos.pop(orig_idx)
-                        st.rerun()
+        
+        cols_per_row = 3
+        for i in range(0, len(lancamentos_turma), cols_per_row):
+            batch = lancamentos_turma[i : i + cols_per_row]
+            cols = st.columns(cols_per_row)
+            for j, (orig_idx, item) in enumerate(batch):
+                with cols[j]:
+                    st.markdown(
+                        f"""
+                        <table class="action-table">
+                            <thead>
+                                <tr><th>📘 {item['materia']}</th></tr>
+                            </thead>
+                        </table>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    c_b1, c_b2 = st.columns(2)
+                    with c_b1:
+                        if st.button("✏️ Editar", key=f"btn_edit_{orig_idx}"):
+                            st.session_state.editing_idx = orig_idx
+                            st.rerun()
+                    with c_b2:
+                        if st.button("🗑️ Deletar", key=f"btn_del_{orig_idx}"):
+                            st.session_state.lancamentos.pop(orig_idx)
+                            st.rerun()
 
-        # Botões para Download (Excel e PDF)
+        # -------------------------------------------------------------
+        # EXPORTAÇÃO EXCEL IDENTICA À TELA (OPENPYXL)
+        # -------------------------------------------------------------
         st.markdown("---")
         c_exp1, c_exp2 = st.columns([1, 1])
 
         with c_exp1:
-            rows_excel = [item for _, item in lancamentos_turma]
-            df_exp = pd.DataFrame(rows_excel)
-            buffer_excel = io.BytesIO()
-            with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
-                df_exp.to_excel(writer, index=False, sheet_name="Lançamentos")
+            if HAS_OPENPYXL:
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Conferência"
 
-            st.download_button(
-                label="📥 Baixar Planilha em Excel (.xlsx)",
-                data=buffer_excel.getvalue(),
-                file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+                ws.views.sheetView[0].showGridLines = True
+
+                # Estilos
+                header_main_fill = PatternFill(start_color="0D2B59", end_color="0D2B59", fill_type="solid")
+                header_sub_fill = PatternFill(start_color="1B55A8", end_color="1B55A8", fill_type="solid")
+                materia_bg_0 = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+                materia_bg_1 = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+                destaque_fill = PatternFill(start_color="FFF59D", end_color="FFF59D", fill_type="solid")
+                ok_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
+                err_fill = PatternFill(start_color="FFCDD2", end_color="FFCDD2", fill_type="solid")
+
+                font_header = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+                font_title = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+                font_regular = Font(name="Segoe UI", size=10)
+                font_bold = Font(name="Segoe UI", size=10, bold=True)
+                font_ok = Font(name="Segoe UI", size=10, bold=True, color="2E7D32")
+                font_err = Font(name="Segoe UI", size=10, bold=True, color="C62828")
+
+                align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                thin_border_side = Side(style="thin", color="CCCCCC")
+                header_border_side = Side(style="thin", color="103871")
+                border_cell = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+                border_header = Border(left=header_border_side, right=header_border_side, top=header_border_side, bottom=header_border_side)
+
+                # Linha 1: Título Principal
+                ws.merge_cells("A1:U1")
+                ws["A1"] = titulo_grade
+                ws["A1"].font = font_title
+                ws["A1"].fill = header_main_fill
+                ws["A1"].alignment = align_center
+
+                # Ajuste de merge do cabeçalho
+                ws.merge_cells("A2:A3")
+                ws["A2"] = "Componente Curricular"
+                ws.merge_cells("B2:B3")
+                ws["B2"] = "Etapa"
+                ws.merge_cells("C2:E2")
+                ws["C2"] = "Segunda"
+                ws.merge_cells("F2:H2")
+                ws["F2"] = "Terça"
+                ws.merge_cells("I2:K2")
+                ws["I2"] = "Quarta"
+                ws.merge_cells("L2:N2")
+                ws["L2"] = "Quinta"
+                ws.merge_cells("O2:Q2")
+                ws["O2"] = "Sexta"
+                ws.merge_cells("R2:R3")
+                ws["R2"] = "Nº aulas por etapa"
+                ws.merge_cells("S2:S3")
+                ws["S2"] = "TOTAL AULAS"
+                ws.merge_cells("T2:T3")
+                ws["T2"] = "AULAS ANUAL"
+                ws.merge_cells("U2:U3")
+                ws["U2"] = "SITUAÇÃO"
+
+                sub_headers = ["Nº aulas", "Nº/etapa", "Total"] * 5
+                for col_idx, sub in enumerate(sub_headers, start=3):
+                    cell = ws.cell(row=3, column=col_idx)
+                    cell.value = sub
+
+                # Estilizar todo o bloco de cabeçalho
+                for r in range(2, 4):
+                    for c in range(1, 22):
+                        cell = ws.cell(row=r, column=c)
+                        cell.fill = header_sub_fill
+                        cell.font = font_header
+                        cell.alignment = align_center
+                        cell.border = border_header
+
+                current_row = 4
+                for pos, (orig_idx, item) in enumerate(lancamentos_turma):
+                    mat = item["materia"]
+                    prev = item["previsto"]
+                    s_a, t_a, q_a, qui_a, sex_a = item["Seg"], item["Ter"], item["Qua"], item["Qui"], item["Sex"]
+                    bg_fill = materia_bg_1 if pos % 2 == 0 else materia_bg_0
+
+                    tot_anual = 0
+                    for e in [1, 2, 3]:
+                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+                        tot_anual += (s_a * s_d) + (t_a * t_d) + (q_a * q_d) + (qui_a * qui_d) + (sex_a * sex_d)
+
+                    dif = tot_anual - prev
+                    sit_txt = "OK" if dif == 0 else (f"EXCESSO (+{dif})" if dif > 0 else f"FALTA ({dif})")
+                    sit_font = font_ok if dif == 0 else font_err
+                    sit_fill = ok_fill if dif == 0 else err_fill
+
+                    # Preenchimento das 3 linhas do componente
+                    r_start = current_row
+                    r_end = current_row + 2
+
+                    ws.merge_cells(start_row=r_start, start_column=1, end_row=r_end, end_column=1)
+                    ws.cell(row=r_start, column=1, value=mat)
+
+                    ws.merge_cells(start_row=r_start, start_column=3, end_row=r_end, end_column=3)
+                    ws.cell(row=r_start, column=3, value=s_a)
+
+                    ws.merge_cells(start_row=r_start, start_column=6, end_row=r_end, end_column=6)
+                    ws.cell(row=r_start, column=6, value=t_a)
+
+                    ws.merge_cells(start_row=r_start, start_column=9, end_row=r_end, end_column=9)
+                    ws.cell(row=r_start, column=9, value=q_a)
+
+                    ws.merge_cells(start_row=r_start, start_column=12, end_row=r_end, end_column=12)
+                    ws.cell(row=r_start, column=12, value=qui_a)
+
+                    ws.merge_cells(start_row=r_start, start_column=15, end_row=r_end, end_column=15)
+                    ws.cell(row=r_start, column=15, value=sex_a)
+
+                    ws.merge_cells(start_row=r_start, start_column=19, end_row=r_end, end_column=19)
+                    ws.cell(row=r_start, column=19, value=tot_anual)
+
+                    ws.merge_cells(start_row=r_start, start_column=20, end_row=r_end, end_column=20)
+                    ws.cell(row=r_start, column=20, value=prev)
+
+                    ws.merge_cells(start_row=r_start, start_column=21, end_row=r_end, end_column=21)
+                    ws.cell(row=r_start, column=21, value=sit_txt)
+
+                    for idx, e in enumerate([1, 2, 3]):
+                        r = r_start + idx
+                        s_d = dias_map.loc["Segunda", f"Etapa {e}"]
+                        t_d = dias_map.loc["Terça", f"Etapa {e}"]
+                        q_d = dias_map.loc["Quarta", f"Etapa {e}"]
+                        qui_d = dias_map.loc["Quinta", f"Etapa {e}"]
+                        sex_d = dias_map.loc["Sexta", f"Etapa {e}"]
+
+                        s_t, t_t, q_t, qui_t, sex_t = s_a * s_d, t_a * t_d, q_a * q_d, qui_a * qui_d, sex_a * sex_d
+                        tot_etapa = s_t + t_t + q_t + qui_t + sex_t
+
+                        ws.cell(row=r, column=2, value=e)
+                        ws.cell(row=r, column=4, value=s_d)
+                        ws.cell(row=r, column=5, value=s_t)
+
+                        ws.cell(row=r, column=7, value=t_d)
+                        ws.cell(row=r, column=8, value=t_t)
+
+                        ws.cell(row=r, column=10, value=q_d)
+                        ws.cell(row=r, column=11, value=q_t)
+
+                        ws.cell(row=r, column=13, value=qui_d)
+                        ws.cell(row=r, column=14, value=qui_t)
+
+                        ws.cell(row=r, column=16, value=sex_d)
+                        ws.cell(row=r, column=17, value=sex_t)
+
+                        ws.cell(row=r, column=18, value=tot_etapa)
+
+                    # Formatação de bordas e estilos do bloco
+                    for r in range(r_start, r_end + 1):
+                        for c in range(1, 22):
+                            cell = ws.cell(row=r, column=c)
+                            cell.alignment = align_center
+                            cell.border = border_cell
+                            cell.fill = bg_fill
+                            cell.font = font_regular
+
+                            # Destaques especiais
+                            if c in [3, 6, 9, 12, 15] and cell.value and cell.value > 0:
+                                cell.fill = destaque_fill
+                                cell.font = font_bold
+                            elif c in [1, 18, 19, 20]:
+                                cell.font = font_bold
+
+                            if c == 21:
+                                cell.fill = sit_fill
+                                cell.font = sit_font
+
+                    current_row += 3
+
+                # Larguras das colunas
+                ws.column_dimensions["A"].width = 24
+                ws.column_dimensions["B"].width = 8
+                for col in ["C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"]:
+                    ws.column_dimensions[col].width = 11
+                ws.column_dimensions["R"].width = 16
+                ws.column_dimensions["S"].width = 14
+                ws.column_dimensions["T"].width = 14
+                ws.column_dimensions["U"].width = 16
+
+                excel_buffer = io.BytesIO()
+                wb.save(excel_buffer)
+
+                st.download_button(
+                    label="📥 Baixar Planilha Padrão (.xlsx)",
+                    data=excel_buffer.getvalue(),
+                    file_name=f"Conferencia_{st.session_state.turma_atual}_{st.session_state.ano_letivo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
         with c_exp2:
             if HAS_REPORTLAB:
@@ -663,11 +874,11 @@ with aba1:
                         pdf_table_data.append([
                             Paragraph(mat if e == 1 else "", cell_bold),
                             Paragraph(str(e), cell_style),
-                            Paragraph(str(s_a), cell_style),
-                            Paragraph(str(t_a), cell_style),
-                            Paragraph(str(q_a), cell_style),
-                            Paragraph(str(qui_a), cell_style),
-                            Paragraph(str(sex_a), cell_style),
+                            Paragraph(str(s_a) if e == 1 else "", cell_style),
+                            Paragraph(str(t_a) if e == 1 else "", cell_style),
+                            Paragraph(str(q_a) if e == 1 else "", cell_style),
+                            Paragraph(str(qui_a) if e == 1 else "", cell_style),
+                            Paragraph(str(sex_a) if e == 1 else "", cell_style),
                             Paragraph(str(tot_etapa), cell_bold),
                             Paragraph(str(tot_anual) if e == 1 else "", cell_bold),
                             Paragraph(str(prev) if e == 1 else "", cell_bold),
