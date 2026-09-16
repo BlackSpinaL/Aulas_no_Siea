@@ -198,6 +198,8 @@ with aba2:
 
     with col_cfg3:
         st.markdown("### 3. Gerenciar Disciplinas")
+        
+        # Adicionar nova disciplina
         nova_mat = st.text_input("Nova Disciplina:")
         if st.button("➕ Adicionar Disciplina"):
             if (
@@ -207,6 +209,91 @@ with aba2:
                 st.session_state.disciplinas.append(nova_mat.upper())
                 st.session_state.disciplinas.sort()
                 st.rerun()
+        
+        # Deletar disciplina existente
+        st.markdown("**Excluir Disciplina:**")
+        mat_rem = st.selectbox(
+            "Selecione a disciplina:",
+            ["-- Selecione --"] + st.session_state.disciplinas,
+            key="del_disc_select"
+        )
+        if st.button("🗑️ Deletar Disciplina", key="del_disc_btn"):
+            if mat_rem != "-- Selecione --":
+                st.session_state.disciplinas.remove(mat_rem)
+                # Remove lançamentos dessa disciplina em todas as turmas
+                st.session_state.lancamentos = [
+                    l for l in st.session_state.lancamentos
+                    if l.get("materia") != mat_rem
+                ]
+                st.success(f"Disciplina '{mat_rem}' excluída!")
+                st.rerun()
+
+    st.markdown("---")
+    
+    # -------------------------------------------------------------
+    # EDIÇÃO DOS DIAS DE CADA ETAPA (NOVO RECURSO)
+    # -------------------------------------------------------------
+    st.markdown("### 📅 Editar Dias de Cada Etapa")
+    st.caption("Altere os valores abaixo e clique em 'Salvar Alterações' para atualizar o cálculo.")
+    
+    with st.form("form_editar_dias"):
+        df_edit = st.session_state.dias_etapas.copy()
+        
+        # Cria colunas para edição
+        cols = st.columns([1.5, 1, 1, 1])
+        with cols[0]:
+            st.markdown("**Dia da Semana**")
+        with cols[1]:
+            st.markdown("**Etapa 1**")
+        with cols[2]:
+            st.markdown("**Etapa 2**")
+        with cols[3]:
+            st.markdown("**Etapa 3**")
+        
+        # Inputs para cada linha
+        novos_valores = []
+        for i, row in df_edit.iterrows():
+            cols = st.columns([1.5, 1, 1, 1])
+            with cols[0]:
+                st.markdown(f"**{row['Dia da Semana']}**")
+            with cols[1]:
+                e1 = st.number_input(
+                    f"E1_{row['Dia da Semana']}",
+                    min_value=0,
+                    max_value=60,
+                    value=int(row['Etapa 1']),
+                    label_visibility="collapsed",
+                    key=f"e1_{i}"
+                )
+            with cols[2]:
+                e2 = st.number_input(
+                    f"E2_{row['Dia da Semana']}",
+                    min_value=0,
+                    max_value=60,
+                    value=int(row['Etapa 2']),
+                    label_visibility="collapsed",
+                    key=f"e2_{i}"
+                )
+            with cols[3]:
+                e3 = st.number_input(
+                    f"E3_{row['Dia da Semana']}",
+                    min_value=0,
+                    max_value=60,
+                    value=int(row['Etapa 3']),
+                    label_visibility="collapsed",
+                    key=f"e3_{i}"
+                )
+            novos_valores.append({
+                "Dia da Semana": row['Dia da Semana'],
+                "Etapa 1": e1,
+                "Etapa 2": e2,
+                "Etapa 3": e3,
+            })
+        
+        if st.form_submit_button("💾 Salvar Alterações"):
+            st.session_state.dias_etapas = pd.DataFrame(novos_valores)
+            st.success("Dias das etapas atualizados com sucesso!")
+            st.rerun()
 
     st.markdown("---")
     
