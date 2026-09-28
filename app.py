@@ -149,7 +149,7 @@ if "dias_etapas" not in st.session_state:
 if "lancamentos" not in st.session_state:
     st.session_state.lancamentos = []
 
-st.title(f"📊 Conferência dos Diários - {st.session_state.ano_letivo}")
+st.title(f"📊 Contagem de Aulas dos Professores - SIEA - {st.session_state.ano_letivo}")
 aba1, aba2 = st.tabs(["📋 Grade de Aulas (Visualização)", "⚙️ Configurações"])
 
 # -------------------------------------------------------------
