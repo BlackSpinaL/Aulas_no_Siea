@@ -12,7 +12,7 @@ except ImportError:
     HAS_OPENPYXL = False
 
 st.set_page_config(
-    page_title="Conferência dos Diários",
+    page_title="Contagem de Aulas dos Professores - SIEA",
     layout="wide",
 )
 
